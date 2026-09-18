@@ -183,22 +183,29 @@ Item {
         return m
     }
 
-    // Map a day's contribution count to GitHub's DARK theme palette.
-    // 0  → #161b22 (very dark, almost invisible against the dark surface)
-    // 1-3 → #0e4429 (dark green)
-    // 4-6 → #006d32
-    // 7-9 → #26a641
-    // 10+ → #39d353 (bright green)
+    // Map a day's contribution count to an opacity ramp of the wallpaper's
+    // accent color. This way:
+    //  - 0 commits → faint on-surface tint (always visible against the dark
+    //    surface, no "missing cell" confusion)
+    //  - few commits → 25% accent
+    //  - many commits → 100% accent (vivid)
     // Bucketing is by ratio against the dataset max so the most-active
-    // days always reach the brightest color regardless of absolute counts.
+    // days always reach full saturation regardless of absolute counts.
     function gitHubColorFor(count, max) {
-        if (!count || count <= 0) return "#161b22"
-        if (!max || max <= 0) return "#0e4429"
+        if (!count || count <= 0) {
+            // Visible-but-muted empty cell: white @ 8% alpha against the
+            // dark surface — clearly distinguishable from the surface itself
+            // while still reading as "nothing here".
+            return Qt.rgba(colText.r, colText.g, colText.b, 0.08)
+        }
+        if (!max || max <= 0) return Qt.rgba(colAccent.r, colAccent.g, colAccent.b, 0.25)
         const r = count / max
-        if (r >= 0.75) return "#39d353"
-        if (r >= 0.50) return "#26a641"
-        if (r >= 0.25) return "#006d32"
-        return "#0e4429"
+        let a
+        if (r >= 0.75) a = 1.00
+        else if (r >= 0.50) a = 0.75
+        else if (r >= 0.25) a = 0.50
+        else a = 0.25
+        return Qt.rgba(colAccent.r, colAccent.g, colAccent.b, a)
     }
 
     function isToday(iso) {
@@ -533,9 +540,13 @@ Item {
                                 width: 12; height: 12
                                 radius: 2
                                 color: {
-                                    // GitHub's standard intensity ramp (dark theme)
-                                    const colors = ["#161b22", "#0e4429", "#006d32", "#26a641", "#39d353"]
-                                    return colors[index]
+                                    // Empty cell on the left, then 4-step accent ramp
+                                    // matching the heatmap (25/50/75/100% opacity).
+                                    if (index === 0) {
+                                        return Qt.rgba(root.colText.r, root.colText.g, root.colText.b, 0.08)
+                                    }
+                                    const alphas = [0.25, 0.50, 0.75, 1.00]
+                                    return Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, alphas[index - 1])
                                 }
                             }
                         }
