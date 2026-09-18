@@ -183,6 +183,24 @@ Item {
         return m
     }
 
+    // Map a day's contribution count to GitHub's DARK theme palette.
+    // 0  → #161b22 (very dark, almost invisible against the dark surface)
+    // 1-3 → #0e4429 (dark green)
+    // 4-6 → #006d32
+    // 7-9 → #26a641
+    // 10+ → #39d353 (bright green)
+    // Bucketing is by ratio against the dataset max so the most-active
+    // days always reach the brightest color regardless of absolute counts.
+    function gitHubColorFor(count, max) {
+        if (!count || count <= 0) return "#161b22"
+        if (!max || max <= 0) return "#0e4429"
+        const r = count / max
+        if (r >= 0.75) return "#39d353"
+        if (r >= 0.50) return "#26a641"
+        if (r >= 0.25) return "#006d32"
+        return "#0e4429"
+    }
+
     function isToday(iso) {
         if (!iso) return false
         const d = new Date(iso + "T00:00:00")
@@ -455,10 +473,11 @@ Item {
                                     radius: 3
                                     x: col * (root.cellSize + root.cellGap)
                                     y: row * (root.cellSize + root.cellGap)
-                                    color: {
-                                        if (!modelData.date) return "transparent"
-                                        return modelData.color || Qt.rgba(root.colText.r, root.colText.g, root.colText.b, 0.06)
-                                    }
+                                    // GitHub's GraphQL returns the LIGHT theme palette
+                                    // by default (`#ebedf0` for zero commits — near-white).
+                                    // Map by count instead so the card uses the dark-theme
+                                    // intensity ramp that matches the rest of the UI.
+                                    color: root.gitHubColorFor(modelData.count, root.maxContribCount())
                                     HoverHandler {
                                         id: cellHover
                                         cursorShape: Qt.PointingHandCursor
