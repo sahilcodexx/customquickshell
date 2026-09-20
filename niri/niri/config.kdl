@@ -222,6 +222,8 @@ binds {
     // Print { spawn-sh "f=~/Pictures/$(date +'%Y-%m-%d_%H-%M-%S').png && grim -g \"$(slurp-persistent)\" \"$f\" && wl-copy < \"$f\""; }
     // Shift+Print { spawn-sh "f=~/Pictures/$(date +'%Y-%m-%d_%H-%M-%S').png && grim -g \"$(slurp-persistent --last)\" \"$f\" && wl-copy < \"$f\""; }
     // Mod+Print { spawn-sh "grim - | wl-copy"; }
+    Print { spawn-sh "niri msg action screenshot"; }
+    Mod+Alt+R { spawn-sh "noctalia msg plugin noctalia/screen_recorder:service all toggle"; }
     Mod+S { spawn-sh "$HOME/.local/bin/shot-window"; }
     Mod+Shift+S { spawn-sh "$HOME/.local/bin/shot-region"; }
     Mod+Grave { spawn-sh "$HOME/.local/bin/shot-region"; }
