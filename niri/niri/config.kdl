@@ -308,6 +308,8 @@ binds {
     Mod+WheelScrollLeft       { focus-column-left; }
     Mod+Ctrl+WheelScrollRight { move-column-right; }
     Mod+Ctrl+WheelScrollLeft  { move-column-left; }
+    Mod+Shift+WheelScrollUp   { focus-column-left; }
+    Mod+Shift+WheelScrollDown { focus-column-right; }
 
     // ── By Index ──
     Mod+1 { focus-workspace 1; }
