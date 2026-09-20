@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# noctalia-restart — kill the noctalia daemon and respawn it in the background.
+#
+# Used as the target of Mod+Ctrl+R in niri, so a stuck noctalia (frozen panel,
+# unresponsive IPC, wedged shader) can be recovered without logging out.
+#
+# Note: any open noctalia panels (launcher, clipboard, control-center, etc.) will
+# close along with the daemon and need to be re-toggled. Panels re-attach to the
+# new daemon over the existing noctalia-wayland socket, so the user-visible
+# recovery is "panels close → Mod+Space reopens launcher → everything else works".
+
+set -e
+
+# Kill the daemon. The cmdline shows as just "noctalia" (the -d flag is
+# consumed by the daemon internally), so we match the comm name with -x.
+# -x alone is enough; -f matches the full cmdline which would also work
+# but can be brittle with flags like -d that aren't always visible.
+pkill -x noctalia 2>/dev/null || true
+
+# Give the wayland socket a moment to release the lockfile.
+sleep 0.5
+
+# Respawn detached so the spawning shell (which is bound to a keybind) can
+# return immediately. Setsid detaches into a new session so SIGHUP from
+# niri's spawn-sh doesn't kill it.
+setsid nohup noctalia -d >/dev/null 2>&1 </dev/null &
+
+# Don't wait for it. The daemon takes a beat to bind the socket.
+disown 2>/dev/null || true
