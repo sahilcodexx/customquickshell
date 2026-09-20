@@ -1,0 +1,442 @@
+#!/usr/bin/env python3
+"""
+github-fetch — pulls GitHub data via `gh` CLI and emits a single JSON blob
+for the github-card Quickshell widget.
+
+Usage: github-fetch [--once]
+Outputs to stdout. Caches at ~/.local/state/quickshell/github-card/cache.json.
+Polling is the card's job; this script is a one-shot fetcher.
+"""
+from __future__ import annotations
+
+import json
+import math
+import os
+import subprocess
+import sys
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import date, datetime, timedelta
+from pathlib import Path
+
+CACHE_PATH = Path(os.path.expanduser("~/.local/state/quickshell/github-card/cache.json"))
+CACHE_TTL = 300  # 5 min, matches the card footer
+
+
+def gh(args: list[str], check: bool = True) -> str:
+    """Run a `gh` command and return stdout. Raises on non-zero exit."""
+    cmd = ["gh"] + args
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if check and out.returncode != 0:
+            raise RuntimeError(f"gh failed ({out.returncode}): {out.stderr.strip()}")
+        return out.stdout
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(f"gh timeout after 30s: {' '.join(cmd)}") from e
+
+
+def gh_json(args: list[str]) -> object:
+    """Run a `gh` command and parse its stdout as JSON."""
+    out = gh(args + ["--jq", "."]) if False else gh(args)
+    out = out.strip()
+    if not out:
+        return None
+    try:
+        return json.loads(out)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"gh JSON parse failed: {e}\n{out[:200]}") from e
+
+
+def fetch_user_and_counts() -> dict:
+    """Combined GraphQL: profile + contribution calendar + total stars.
+    One round-trip instead of three."""
+    query = """
+{
+  viewer {
+    login
+    name
+    avatarUrl
+    url
+    bio
+    followers { totalCount }
+    following { totalCount }
+    publicRepos: repositories(ownerAffiliations: OWNER, privacy: PUBLIC) { totalCount }
+    contributionsCollection {
+      contributionCalendar {
+        totalContributions
+        weeks {
+          contributionDays {
+            contributionCount
+            date
+          }
+        }
+      }
+    }
+    starredRepos: repositories(first: 100, ownerAffiliations: OWNER) {
+      totalCount
+      nodes { stargazerCount }
+    }
+  }
+}
+"""
+    raw = gh_json(["api", "graphql", "-f", f"query={query}"])
+    v = raw["data"]["viewer"]
+    cal = v["contributionsCollection"]["contributionCalendar"]
+    days = []
+    weeks = []
+    for week in cal["weeks"]:
+        wdays = []
+        for day in week["contributionDays"]:
+            wdays.append({
+                "date": day["date"],
+                "count": day["contributionCount"],
+                "color": "",  # filled client-side from count
+            })
+        if len(wdays) < 7:
+            wdays = wdays + [{"date": "", "count": 0, "color": "transparent"}] * (7 - len(wdays))
+        weeks.append(wdays)
+        days.extend([d for d in wdays if d.get("date")])
+    return {
+        "user": {
+            "login": v.get("login", ""),
+            "name": v.get("name") or v.get("login", ""),
+            "avatar_url": v.get("avatarUrl", ""),
+            "followers": v.get("followers", {}).get("totalCount", 0),
+            "following": v.get("following", {}).get("totalCount", 0),
+            "public_repos": v.get("publicRepos", {}).get("totalCount", 0),
+            "public_gists": 0,
+            "bio": v.get("bio") or "",
+            "html_url": v.get("url", ""),
+        },
+        "calendar": {
+            "total": cal["totalContributions"],
+            "weeks": weeks,
+            "days": days,
+        },
+        "stars_total": sum(n["stargazerCount"] for n in v["starredRepos"]["nodes"]),
+    }
+
+
+def fetch_contribution_calendar() -> dict:
+    """53 weeks × 7 days of contribution counts + colors via GraphQL."""
+    query = """
+{
+  viewer {
+    contributionsCollection {
+      contributionCalendar {
+        totalContributions
+        weeks {
+          contributionDays {
+            contributionCount
+            date
+            color
+          }
+        }
+      }
+    }
+  }
+}
+"""
+    raw = gh_json(["api", "graphql", "-f", f"query={query}"])
+    cal = raw["data"]["viewer"]["contributionsCollection"]["contributionCalendar"]
+    days = []
+    for week in cal["weeks"]:
+        for day in week["contributionDays"]:
+            days.append({
+                "date": day["date"],
+                "count": day["contributionCount"],
+                "color": day["color"],
+            })
+    # Flatten 53×7 grid (with empty Sunday padding for the first week)
+    weeks = []
+    for week in cal["weeks"]:
+        # Transform contributionCount -> count for consistency with `days`
+        wdays = []
+        for day in week["contributionDays"]:
+            wdays.append({
+                "date": day["date"],
+                "count": day["contributionCount"],
+                "color": day["color"],
+            })
+        # Pad to 7 days (GraphQL omits leading/trailing days outside window)
+        if len(wdays) < 7:
+            wdays = wdays + [{"date": "", "count": 0, "color": "transparent"}] * (7 - len(wdays))
+        weeks.append(wdays)
+    return {
+        "total": cal["totalContributions"],
+        "days": days,
+        "weeks": weeks,
+    }
+
+
+def compute_streaks(days: list[dict]) -> dict:
+    """Current streak = consecutive days with count > 0 ending at today (or yesterday if today is 0).
+    Best streak = longest run ever in the dataset."""
+    if not days:
+        return {"current": 0, "best": 0, "today": 0}
+    today_count = days[-1]["count"] if days else 0
+    yesterday_count = days[-2]["count"] if len(days) > 1 else 0
+
+    # Current streak
+    current = 0
+    # Start from today if today has activity, else from yesterday
+    start = len(days) - 1 if today_count > 0 else len(days) - 2
+    for i in range(start, -1, -1):
+        if days[i]["count"] > 0:
+            current += 1
+        else:
+            break
+
+    # Best streak — longest consecutive run anywhere
+    best = 0
+    run = 0
+    for d in days:
+        if d["count"] > 0:
+            run += 1
+            best = max(best, run)
+        else:
+            run = 0
+
+    return {"current": current, "best": best, "today": today_count}
+
+
+def fetch_top_repos(limit: int = 4) -> list[dict]:
+    raw = gh_json(["api", "user/repos?per_page=100&sort=updated&type=owner"])
+    repos = []
+    for r in raw:
+        # Compute "time ago" string
+        try:
+            upd = datetime.fromisoformat(r["updated_at"].replace("Z", "+00:00"))
+            delta = datetime.now(upd.tzinfo) - upd
+            secs = int(delta.total_seconds())
+            if secs < 60:
+                ago = f"{secs}s"
+            elif secs < 3600:
+                ago = f"{secs // 60}m"
+            elif secs < 86400:
+                ago = f"{secs // 3600}h"
+            elif secs < 86400 * 30:
+                ago = f"{secs // 86400}d"
+            elif secs < 86400 * 365:
+                ago = f"{secs // (86400 * 30)}mo"
+            else:
+                ago = f"{secs // (86400 * 365)}y"
+        except Exception:
+            ago = "?"
+
+        repos.append({
+            "name": r["name"],
+            "full_name": r["full_name"],
+            "description": (r.get("description") or "")[:80],
+            "language": r.get("language") or "",
+            "stars": r.get("stargazers_count", 0),
+            "forks": r.get("forks_count", 0),
+            "private": r.get("private", False),
+            "updated_at": r.get("updated_at", "")[:10],
+            "updated_ago": ago,
+            "html_url": r.get("html_url", ""),
+        })
+    # Sort by stars desc, take top N
+    repos.sort(key=lambda r: r["stars"], reverse=True)
+    return repos[:limit]
+
+
+def fetch_total_stars() -> int:
+    """Sum stargazerCount across all OWNER repos (uses GraphQL)."""
+    query = """
+{
+  viewer {
+    repositories(first: 100, ownerAffiliations: OWNER) {
+      totalCount
+      nodes { stargazerCount }
+    }
+  }
+}
+"""
+    try:
+        raw = gh_json(["api", "graphql", "-f", f"query={query}"])
+        nodes = raw["data"]["viewer"]["repositories"]["nodes"]
+        return sum(n["stargazerCount"] for n in nodes)
+    except Exception:
+        # Fallback: sum from already-fetched repos
+        return -1
+
+
+def fetch_notifications() -> list[dict]:
+    try:
+        raw = gh_json(["api", "notifications"])
+    except RuntimeError:
+        return []
+    items = []
+    for n in raw[:20]:
+        items.append({
+            "id": n.get("id", ""),
+            "repo": n.get("repository", {}).get("full_name", ""),
+            "title": n.get("subject", {}).get("title", ""),
+            "type": n.get("subject", {}).get("type", ""),
+            "unread": n.get("unread", False),
+            "reason": n.get("reason", ""),
+            "updated_at": n.get("updated_at", "")[:10],
+            "url": n.get("subject", {}).get("url", ""),
+        })
+    return items
+
+
+def fetch_open_prs() -> list[dict]:
+    """Pull requests authored by the current user, open state."""
+    try:
+        out = gh(["search", "prs", "--author=@me", "--state=open",
+                  "--limit", "20", "--json",
+                  "title,number,state,isDraft,repository,createdAt,updatedAt,url"])
+        items = json.loads(out)
+    except Exception:
+        return []
+    prs = []
+    for p in items:
+        prs.append({
+            "title": p.get("title", ""),
+            "number": p.get("number", 0),
+            "state": p.get("state", "open"),
+            "is_draft": p.get("isDraft", False),
+            "repo": p.get("repository", {}).get("nameWithOwner", ""),
+            "updated_at": p.get("updatedAt", "")[:10],
+            "url": p.get("url", ""),
+        })
+    return prs
+
+
+def _fetch_repo_actions(full: str) -> list[dict]:
+    """Fetch workflow runs for a single repo. Used inside fetch_actions_summary."""
+    try:
+        runs_raw = gh_json(["api", f"repos/{full}/actions/runs?per_page=10"])
+        runs = runs_raw.get("workflow_runs", [])
+        out = []
+        for run in runs[:3]:
+            out.append({
+                "repo": full,
+                "name": run.get("name", ""),
+                "status": run.get("status", ""),
+                "conclusion": run.get("conclusion") or "",
+                "branch": run.get("head_branch", ""),
+                "event": run.get("event", ""),
+                "updated_at": run.get("updated_at", "")[:10],
+                "url": run.get("html_url", ""),
+            })
+        return out
+    except Exception:
+        return []
+
+
+def fetch_actions_summary() -> dict:
+    """Quick summary of GitHub Actions across user's repos.
+    Fetches the top 5 pushed repos in parallel (each ~1-3s, was sequential)."""
+    query = """
+{
+  viewer {
+    repositories(first: 10, ownerAffiliations: OWNER, orderBy: {field: PUSHED_AT, direction: DESC}) {
+      nodes { nameWithOwner }
+    }
+  }
+}
+"""
+    try:
+        raw = gh_json(["api", "graphql", "-f", f"query={query}"])
+        repos = [n["nameWithOwner"] for n in raw["data"]["viewer"]["repositories"]["nodes"][:5]]
+    except Exception:
+        return {"total": 0, "failing": 0, "items": []}
+
+    items: list[dict] = []
+    with ThreadPoolExecutor(max_workers=5) as ex:
+        for batch in ex.map(_fetch_repo_actions, repos):
+            items.extend(batch)
+    failing = sum(1 for it in items if it.get("conclusion") == "failure")
+    return {"total": len(items), "failing": failing, "items": items}
+
+
+def main() -> int:
+    use_cache = "--once" not in sys.argv
+    # Check cache freshness
+    if use_cache and CACHE_PATH.exists():
+        age = time.time() - CACHE_PATH.stat().st_mtime
+        if age < CACHE_TTL:
+            try:
+                data = json.loads(CACHE_PATH.read_text())
+                data["_from_cache"] = True
+                data["_cache_age"] = int(age)
+                json.dump(data, sys.stdout, separators=(",", ":"))
+                return 0
+            except Exception:
+                pass  # fall through to fresh fetch
+
+    try:
+        # Fetch all data sources concurrently. The user/calendar/stars come
+        # from one combined GraphQL round-trip; the rest are independent gh
+        # calls that run in parallel. Total wall time ≈ max(single_call)
+        # instead of sum-of-all (≈12s → ≈2s).
+        with ThreadPoolExecutor(max_workers=5) as ex:
+            futures = {
+                ex.submit(fetch_user_and_counts): "main",
+                ex.submit(fetch_top_repos, 4): "top_repos",
+                ex.submit(fetch_notifications): "notifications",
+                ex.submit(fetch_open_prs): "open_prs",
+                ex.submit(fetch_actions_summary): "actions",
+            }
+            results = {}
+            for fut in as_completed(futures):
+                key = futures[fut]
+                try:
+                    results[key] = fut.result()
+                except Exception as e:
+                    sys.stderr.write(f"github-fetch: {key} failed: {e}\n")
+                    results[key] = {} if key != "top_repos" else []
+
+        main_data = results.get("main", {})
+        user = main_data.get("user", {})
+        cal = main_data.get("calendar", {"weeks": [], "days": [], "total": 0})
+        total_stars = main_data.get("stars_total", -1)
+        top_repos = results.get("top_repos", [])
+        notifications = results.get("notifications", [])
+        open_prs = results.get("open_prs", [])
+        actions = results.get("actions", {"total": 0, "failing": 0, "items": []})
+
+        streaks = compute_streaks(cal.get("days", []))
+
+        data = {
+            "_fetched_at": int(time.time()),
+            "user": user,
+            "calendar": cal,
+            "streaks": streaks,
+            "top_repos": top_repos,
+            "stats": {
+                "stars_total": total_stars,
+                "public_repos": user["public_repos"],
+                "followers": user["followers"],
+                "following": user["following"],
+                "contributions_total": cal["total"],
+                "streak_current": streaks["current"],
+                "streak_best": streaks["best"],
+                "streak_today": streaks["today"],
+            },
+            "notifications": notifications,
+            "open_prs": open_prs,
+            "actions": actions,
+        }
+
+        # Write cache
+        CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        CACHE_PATH.write_text(json.dumps(data, separators=(",", ":")))
+        json.dump(data, sys.stdout, separators=(",", ":"))
+        return 0
+    except Exception as e:
+        # Return cached data if available, otherwise empty structure
+        if CACHE_PATH.exists():
+            sys.stderr.write(f"github-fetch: {e}, returning cached data\n")
+            sys.stdout.write(CACHE_PATH.read_text())
+            return 0
+        sys.stderr.write(f"github-fetch: {e}\n")
+        json.dump({"_error": str(e), "user": {}, "stats": {}, "calendar": {"weeks": [], "days": [], "total": 0}, "top_repos": [], "notifications": [], "open_prs": [], "actions": {"items": []}, "streaks": {"current": 0, "best": 0, "today": 0}}, sys.stdout)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

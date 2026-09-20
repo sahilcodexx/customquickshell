@@ -6,28 +6,41 @@ This document is the source of truth for the Niri + Noctalia desktop configurati
 
 ---
 
-## 1. What's in this folder
+## 1. What's in this folder — two siblings, two setups
 
 ```
 ~/customquickshell/niri/
 ├── mycustomsetup.md                  ← you are here
-└── end4/                             ← versioned source-of-truth (lives in git)
-    ├── niri/
-    │   ├── config.kdl                ← niri config (mirrored to ~/.config/niri/config.kdl)
-    │   ├── KEYBINDS.txt              ← quick reference: every keybind in config.kdl
-    │   └── SOURCE.txt                ← last-sync timestamp
-    ├── noctalia/
-    │   ├── plugins/nightlight-slider/  ← local noctalia plugin (wlsunset driver)
-    │   │   ├── plugin.toml
-    │   │   ├── panel.luau
-    │   │   └── service.luau
-    │   └── dotfiles/
-    │       └── xdg-desktop-portal.conf  ← pinned portal default (gnome for Niri)
-    └── bin/
-        └── nightlight-set            ← bash helper that kills + restarts wlsunset
+├── install.sh                        ← re-apply everything in niri/ to the live system
+├── niri/                             ← ★ CUSTOM Niri + noctalia setup (this session's work)
+│   ├── niri/
+│   │   ├── config.kdl                ← niri config → ~/.config/niri/config.kdl
+│   │   ├── KEYBINDS.txt              ← quick reference
+│   │   └── SOURCE.txt                ← last-sync timestamp
+│   ├── noctalia/
+│   │   ├── plugins/nightlight-slider/  ← wlsunset driver (slider UI + presets)
+│   │   │   ├── plugin.toml
+│   │   │   ├── panel.luau
+│   │   │   └── service.luau
+│   │   └── dotfiles/
+│   │       └── xdg-desktop-portal.conf  ← default = gnome (for Niri)
+│   └── bin/
+│       └── nightlight-set            ← bash helper that kills + restarts wlsunset
+└── end4/                             ← ★ Existing end-4/dots-hyprland ii additions (untouched)
+    ├── README.md                     ← original end4 README
+    ├── restore.sh                    ← original end4 restore script
+    ├── bin/
+    │   └── github-fetch              ← fetches GitHub contributions for the ii github card
+    ├── modules/ii/                   ← QML sidebar modules for end-4 ii
+    │   └── sidebarLeft/
+    │       ├── AiUsagePanel.qml      ← AI usage panel (Claude/Minimax/Grok/etc.)
+    │       └── SidebarLeftContent.qml
+    └── patches/                      ← patches applied on top of upstream end-4
+        ├── hypr-execs.patch
+        └── ii-launcher-search.patch
 ```
 
-The `end4/` prefix matches the upstream convention from `end-4/dots-hyprland` — this is the second arm of the user's setup (Hyprland = end-4 ii quickshell, Niri = this folder). Both setups must remain independent and not cross-pollute.
+**`niri/`** is everything we built this session for the user's Niri compositor. **`end4/`** is the pre-existing customquickshell content (Hyprland-targeted) — kept here for reference and so the full setup is in one git repo. **They do not interact.** end4 files only apply when running Hyprland with `end-4/dots-hyprland` ii quickshell; niri files only apply when running Niri with noctalia.
 
 ---
 
