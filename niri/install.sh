@@ -27,10 +27,15 @@ cp -v "${REPO}/niri/noctalia/dotfiles/xdg-desktop-portal.conf" \
        "${HOME_DIR}/.config/xdg-desktop-portal/hyprland-portals.conf"
 systemctl --user restart xdg-desktop-portal.service 2>/dev/null || true
 
-echo "==[3/5]== Installing nightlight-set helper"
+echo "==[3/5]== Installing helper scripts to ~/.local/bin/"
 mkdir -p "${HOME_DIR}/.local/bin"
-cp -v "${REPO}/niri/bin/nightlight-set" "${HOME_DIR}/.local/bin/nightlight-set"
-chmod +x "${HOME_DIR}/.local/bin/nightlight-set"
+for f in "${REPO}/niri/bin/"*; do
+    [[ -f "$f" && -x "$f" ]] || continue
+    cp -v "$f" "${HOME_DIR}/.local/bin/$(basename "$f")"
+    chmod +x "${HOME_DIR}/.local/bin/$(basename "$f")"
+done
+# Helpers installed: nightlight-set, noctalia-restart, rec-with-audio,
+# rec-no-audio, shot-region, shot-window.
 
 echo "==[4/5]== Installing nightlight-slider plugin"
 SRC="${HOME_DIR}/.local/state/noctalia/plugins/sources/local/repo/nightlight-slider"

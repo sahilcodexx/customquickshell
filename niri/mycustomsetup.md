@@ -141,13 +141,43 @@ Every keybind in the config — full reference in `end4/niri/KEYBINDS.txt`. High
 | `Mod+Ctrl+C` | volume picker (wpctl status) |
 | `Mod+Alt+L` | lock (hyprlock) |
 | `Mod+Comma` | noctalia settings |
+| `Mod+Alt+R` | toggle screen recording **with system audio** (`rec-with-audio`) |
+| `Ctrl+Mod+Alt+R` | toggle screen recording **without audio** (`rec-no-audio`) |
+| `Mod+Ctrl+R` | restart noctalia (`noctalia-restart`) |
 | `Print` | screenshot UI (niri's built-in) |
 | XF86Audio* | volume / mute / mic / media keys via wpctl + playerctl |
 
 Helper scripts referenced from keybinds live in `~/.local/bin/`:
-- `shot-region` — `slurp | grim -g - - | wl-copy`
-- `shot-window` — `grim -g "$(slurp -w 0 -o)" - | wl-copy`
+- `shot-region` — `slurp | grim -g - - | wl-copy` (with `--type image/png` fix)
+- `shot-window` — `grim -g "$(slurp -w 0 -o)" - | wl-copy` (with `--type image/png` fix)
 - `hypr-display-toggle` — display profile switcher (kept from Hyprland era)
+- `nightlight-set <temp>` — start wlsunset at the given temp (south-pole polar-night trick)
+- `noctalia-restart` — kill+respawn noctalia daemon (recovery helper)
+- `rec-with-audio` — toggle recording with `-a default_output -ac opus` via `gpu-screen-recorder -w screen`
+- `rec-no-audio` — toggle video-only recording via `gpu-screen-recorder -w screen`
+
+#### Why two `gpu-screen-recorder` wrappers instead of the noctalia plugin?
+
+The noctalia `screen_recorder` plugin reads its `audio_source` from plugin config at
+record-start. Its IPC channel (`noctalia msg plugin ... start`) only accepts a
+`video_source` override (`focused` | `portal`), not an audio override. So you can't
+get two distinct audio behaviours from two keybinds through the plugin alone.
+
+The two scripts use independent PID files (`~/.local/state/rec-{with,no}-audio.pid`)
+so the keybinds don't interfere — pressing one stops the recording it started, and
+the other can be active at the same time without collision. Outputs land in
+`~/Videos/Recordings/rec-{audio,noaudio}-YYYYMMDD-HHMMSS.mp4`.
+
+#### Why `-w screen` (KMS direct) instead of `-w portal`?
+
+Empirically, the xdg-desktop-portal gnome backend drops its ScreenCast interface
+after a few `CreateSession` calls in quick succession (the second+ call hangs at
+`gsr_capture_portal_setup_dbus: Start`). Since recording hotkeys are by nature
+spammed, portal mode flapped under real use. KMS direct (`-w screen`) bypasses the
+portal entirely — no permission dialogs, no flapping, no portal restart needed.
+Trade-off: it captures the first connected monitor (eDP-1 on laptops) instead of
+honouring Wayland's per-output focus; fine for a single-monitor setup, otherwise
+swap `-w screen` for the monitor name (`gpu-screen-recorder --list-monitors`).
 
 ---
 
@@ -296,9 +326,12 @@ cp ~/customquickshell/niri/end4/noctalia/dotfiles/xdg-desktop-portal.conf \
 systemctl --user restart xdg-desktop-portal.service
 
 # ---------- KEYBIND SNAPSHOT (already in config.kdl) ----------
-# Mod+Shift+N → opens the night light slider panel
-# Mod+V       → noctalia clipboard panel (no launcher)
-# Mod+Space   → noctalia launcher
+# Mod+Shift+N     → opens the night light slider panel
+# Mod+V           → noctalia clipboard panel (no launcher)
+# Mod+Space       → noctalia launcher
+# Mod+Alt+R       → toggle screen recording WITH system audio
+# Ctrl+Mod+Alt+R  → toggle screen recording WITHOUT audio (video-only)
+# Mod+Ctrl+R      → restart noctalia (recovery helper)
 ```
 
 After install, restart noctalia or log out/in for the keybinds to take effect.

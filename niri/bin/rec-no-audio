@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# rec-no-audio — toggle screen recording WITHOUT any audio (video-only).
+# Companion: rec-with-audio (same toggle pattern, with -ac/-a flags).
+# State is tracked via a PID file so the same keybind cleanly stops the
+# recording it started. Two instances use distinct PID files so they can run
+# independently without colliding.
+#
+# Why -o with a timestamp instead of -ro? With `-w portal`, gsr treats `-ro
+# <dir>` as a stream and writes the MP4 to stdout, not the dir. With `-w screen`
+# (KMS direct) `-ro` works but we still build the filename explicitly so the
+# stop notification can echo the exact file path.
+#
+# Why -w screen instead of -w portal? The xdg-desktop-portal gnome backend
+# drops its ScreenCast interface after a few CreateSession calls (observed in
+# this session), so portal-mode recordings hang at "Start" mid-workflow.
+# KMS direct bypasses the portal entirely and works reliably under hotkeys.
+
+set -u
+
+LABEL="no audio"
+STATE_DIR="$HOME/.local/state"
+PID_FILE="$STATE_DIR/rec-no-audio.pid"   # contents: "<pid> <output.mp4>"
+LOG_FILE="$STATE_DIR/rec-no-audio.log"
+OUT_DIR="$HOME/Videos/Recordings"
+
+mkdir -p "$STATE_DIR" "$OUT_DIR"
+
+is_running() {
+    [[ -f "$PID_FILE" ]] && kill -0 "$(awk '{print $1}' "$PID_FILE")" 2>/dev/null
+}
+
+stop_recording() {
+    local pid outpath
+    read -r pid outpath < "$PID_FILE"
+    kill -INT "$pid" 2>/dev/null || true
+    for _ in 1 2 3 4 5; do
+        kill -0 "$pid" 2>/dev/null || break
+        sleep 0.2
+    done
+    kill -TERM "$pid" 2>/dev/null || true
+    sleep 0.2
+    kill -KILL "$pid" 2>/dev/null || true
+    rm -f "$PID_FILE"
+    if [[ -n "$outpath" && -f "$outpath" ]]; then
+        notify-send -a gpu-screen-recorder -t 4000 "Recording stopped ($LABEL)" "Saved: $outpath"
+    else
+        notify-send -a gpu-screen-recorder -t 4000 "Recording stopped ($LABEL)" "Output: $OUT_DIR"
+    fi
+}
+
+start_recording() {
+    local outpath="$OUT_DIR/rec-noaudio-$(date +%Y%m%d-%H%M%S).mp4"
+    # -w screen = KMS direct (no xdg-desktop-portal needed). No audio flags =>
+    # video-only recording.
+    setsid gpu-screen-recorder \
+        -w screen \
+        -f 60 \
+        -k h264 \
+        -c mp4 \
+        -cursor yes \
+        -cr limited \
+        -o "$outpath" \
+        -v no \
+        >> "$LOG_FILE" 2>&1 &
+    local pid=$!
+    disown "$pid" 2>/dev/null || true
+    echo "$pid $outpath" > "$PID_FILE"
+    notify-send -a gpu-screen-recorder -t 4000 "Recording started ($LABEL)" "Press $LABEL keybind again to stop. Output: $outpath"
+}
+
+if is_running; then
+    stop_recording
+else
+    rm -f "$PID_FILE"
+    start_recording
+fi
