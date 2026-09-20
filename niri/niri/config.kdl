@@ -200,6 +200,9 @@ binds {
     // ── Apps (minimal — add your own when you make your dotfiles) ──
     Mod+A { spawn-sh "kitty"; }
     Mod+E { spawn-sh "dolphin"; }
+    Mod+W { spawn-sh "zen-browser"; }
+    Mod+C { spawn-sh "code"; }
+    Mod+Z { spawn-sh "zed"; }
     Mod+F10 { spawn-sh "$HOME/.local/bin/hypr-display-toggle toggle"; }
 
     // ── Noctalia panels (add your own when you make your dotfiles) ──
@@ -220,6 +223,7 @@ binds {
     // Shift+Print { spawn-sh "f=~/Pictures/$(date +'%Y-%m-%d_%H-%M-%S').png && grim -g \"$(slurp-persistent --last)\" \"$f\" && wl-copy < \"$f\""; }
     // Mod+Print { spawn-sh "grim - | wl-copy"; }
     Mod+S { spawn-sh "$HOME/.local/bin/shot-window"; }
+    Mod+Shift+S { spawn-sh "$HOME/.local/bin/shot-region"; }
     Mod+Grave { spawn-sh "$HOME/.local/bin/shot-region"; }
 
     // ── Color Picker ──
