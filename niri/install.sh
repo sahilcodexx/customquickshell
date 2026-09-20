@@ -16,6 +16,11 @@ echo "==[1/5]== Installing niri config"
 mkdir -p "${HOME_DIR}/.config/niri"
 cp -v "${REPO}/niri/niri/config.kdl" "${HOME_DIR}/.config/niri/config.kdl"
 
+echo "==[1b/5]== Installing GTK corner-radius settings"
+mkdir -p "${HOME_DIR}/.config/gtk-3.0" "${HOME_DIR}/.config/gtk-4.0"
+cp -v "${REPO}/niri/noctalia/dotfiles/gtk/gtk-3.0-settings.ini" "${HOME_DIR}/.config/gtk-3.0/settings.ini"
+cp -v "${REPO}/niri/noctalia/dotfiles/gtk/gtk-4.0-settings.ini" "${HOME_DIR}/.config/gtk-4.0/settings.ini"
+
 echo "==[2/5]== Installing xdg-desktop-portal config"
 mkdir -p "${HOME_DIR}/.config/xdg-desktop-portal"
 cp -v "${REPO}/niri/noctalia/dotfiles/xdg-desktop-portal.conf" \
