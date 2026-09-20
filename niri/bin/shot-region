@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# shot-region — interactively select a screen region with slurp and copy
+# the screenshot of that region to the clipboard.
+# Requires: grim, slurp, wl-copy.
+# Exits cleanly (code 0) if the user cancels the selection (Esc on slurp).
+
+set -euo pipefail
+
+for cmd in grim slurp wl-copy; do
+    if ! command -v "$cmd" &>/dev/null; then
+        echo "shot-region: required command '$cmd' not found in PATH" >&2
+        exit 1
+    fi
+done
+
+# slurp prints the selected geometry on stdout and exits 0.
+# Pressing Esc makes slurp exit non-zero with no output — treat that as cancel.
+if ! geom=$(slurp 2>/dev/null); then
+    exit 0
+fi
+
+if [[ -z "$geom" ]]; then
+    exit 0
+fi
+
+grim -g "$geom" - | wl-copy --type image/png
