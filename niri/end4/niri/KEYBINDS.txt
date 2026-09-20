@@ -1,0 +1,41 @@
+niri keybinds snapshot:
+    Mod+Shift+Slash { show-hotkey-overlay; }
+    Mod+Tab repeat=false { toggle-overview; }
+    Mod+A { spawn-sh "kitty"; }
+    Mod+E { spawn-sh "dolphin"; }
+    Mod+F10 { spawn-sh "$HOME/.local/bin/hypr-display-toggle toggle"; }
+    Mod+Space { spawn-sh "noctalia msg panel-toggle launcher"; }
+    Mod+X { spawn-sh "noctalia msg panel-toggle sessionMenu"; }
+    Mod+N { spawn-sh "noctalia msg panel-toggle notifications"; }
+    Mod+Comma { spawn-sh "noctalia msg settings-toggle"; }
+    Mod+Ctrl+C { spawn-sh "noctalia msg panel-toggle control-center"; }
+    Mod+V { spawn-sh "noctalia msg panel-toggle clipboard"; }
+    Mod+Shift+N { spawn-sh "noctalia msg panel-toggle local/nightlight-slider:slider"; }
+    Mod+Shift+W { spawn-sh "noctalia msg wallpaper-random"; }
+    Mod+Alt+L { spawn "hyprlock"; }
+    Mod+S { spawn-sh "$HOME/.local/bin/shot-window"; }
+    Mod+Grave { spawn-sh "$HOME/.local/bin/shot-region"; }
+    Mod+Shift+C { spawn-sh "hyprpicker -a"; }
+    Mod+Q { close-window; }
+    Mod+Shift+Q { quit; }
+    Mod+T { spawn "kitty"; }
+    Mod+B { toggle-column-tabbed-display; }
+    Mod+F { fullscreen-window; }
+    Mod+Shift+F { maximize-column; }
+    Mod+Left  { focus-column-left; }
+    Mod+Down  { focus-window-or-workspace-down; }
+    Mod+Up    { focus-window-or-workspace-up; }
+    Mod+Right { focus-column-right; }
+    Mod+H     { focus-column-left; }
+    Mod+J     { focus-window-or-workspace-down; }
+    Mod+K     { focus-window-or-workspace-up; }
+    Mod+L     { focus-column-right; }
+    Mod+Ctrl+Left  { move-column-left; }
+    Mod+Ctrl+Down  { move-window-down; }
+    Mod+Ctrl+Up    { move-window-up; }
+    Mod+Ctrl+Right { move-column-right; }
+    Mod+Ctrl+H     { move-column-left; }
+    Mod+Ctrl+J     { move-window-down; }
+    Mod+Ctrl+K     { move-window-up; }
+    Mod+Ctrl+L     { move-column-right; }
+    Mod+Home { focus-column-first; }

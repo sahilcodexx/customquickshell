@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# nightlight-set <temperature>
+# Kills any running wlsunset and starts a new one with the given fixed
+# temperature. We use a polar-night latitude (-89.5, 0) so wlsunset treats
+# every moment as night and applies -t as the constant temperature. -T is set
+# just above -t to satisfy wlsunset's "high > low" validation.
+#
+# Temperature range: 1500K (heavy warm) to 6500K (effectively off / daylight).
+# At 6500K wlsunset applies the -t value but it's the natural white point, so
+# there's no visible tint.
+
+set -e
+
+TEMP="${1:-6500}"
+
+# Clamp to valid range.
+if ! [[ "$TEMP" =~ ^[0-9]+$ ]] || [ "$TEMP" -lt 1500 ] || [ "$TEMP" -gt 6500 ]; then
+  echo "nightlight-set: temperature must be between 1500 and 6500 (got: $TEMP)" >&2
+  exit 1
+fi
+
+# Kill any running wlsunset (and let it release the gamma-control resource).
+pkill -x wlsunset 2>/dev/null || true
+
+# Give the compositor a moment to clean up the previous gamma ramp.
+sleep 0.05
+
+# Start a fresh wlsunset. The polar-night latitude forces it to ignore the
+# sun's actual position and always use -t. -T is set +1 above -t but never
+# reached because it's "always night".
+wlsunset -t "$TEMP" -T $((TEMP + 1)) -l -89.5 -L 0 >/dev/null 2>&1 &
+disown 2>/dev/null || true
+
+# Print the temp that was applied so the plugin service can echo it back.
+echo "$TEMP"

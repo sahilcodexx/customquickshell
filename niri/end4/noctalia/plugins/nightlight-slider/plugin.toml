@@ -1,0 +1,55 @@
+id = "local/nightlight-slider"
+name = "Night Light Slider"
+version = "1.0.0"
+plugin_api = 4
+min_noctalia = "5.0.0"
+author = "local"
+license = "MIT"
+dependencies = ["wlsunset"]
+tags = ["display", "night-light", "wayland"]
+icon = "moon-stars"
+description = "Control wlsunset's color temperature with a slider. Replaces noctalia's binary night-light toggle."
+
+[[setting]]
+key = "default_temp"
+type = "int"
+label_key = "settings.default_temp.label"
+description_key = "settings.default_temp.description"
+default = 4500
+min = 1500
+max = 6500
+
+[[setting]]
+key = "min_temp"
+type = "int"
+label_key = "settings.min_temp.label"
+default = 1500
+min = 1000
+max = 6500
+
+[[setting]]
+key = "max_temp"
+type = "int"
+label_key = "settings.max_temp.label"
+default = 6500
+min = 1500
+max = 10000
+
+[[setting]]
+key = "default_enabled"
+type = "bool"
+label_key = "settings.default_enabled.label"
+description_key = "settings.default_enabled.description"
+default = false
+
+[[panel]]
+id = "slider"
+entry = "panel.luau"
+width = 420
+height = 280
+placement = "floating"
+position = "center"
+
+[[service]]
+id = "controller"
+entry = "service.luau"
