@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# shot-full — instant full-screen screenshot to the clipboard. No slurp, no
+# region picker, no focus-stealing overlay: grim fires the wlr-screencopy
+# immediately, so any open dropdown / menu / popup is captured exactly as
+# rendered at the moment of the keybind.
+
+set -euo pipefail
+
+for cmd in grim wl-copy; do
+    if ! command -v "$cmd" &>/dev/null; then
+        echo "shot-full: required command '$cmd' not found in PATH" >&2
+        exit 1
+    fi
+done
+
+grim - | wl-copy --type image/png
