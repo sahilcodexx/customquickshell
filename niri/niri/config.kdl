@@ -54,17 +54,24 @@ input {
 }
 
 // ── Outputs ──
-output "HDMI-A-1" {
-    mode "2560x1440@144.001"
-    position x=0 y=0
-    scale 1
-}
-
+// Laptop-only default: eDP-1 is the primary, sitting at (0, 0). When HDMI-A-1
+// is plugged in it shows up to the right of the laptop; when undocked, the
+// laptop is the only output and lands at the origin so slurp / notification
+// overlays / screen-recorder pickers appear on the visible screen.
+// If you dock and want the external on the LEFT of the laptop instead:
+//   niri msg output HDMI-A-1 position set -2560 0   (one-shot)
+//   persist in this config: edit position x=1920 y=0 -> position x=-2560 y=0
 output "eDP-1" {
     mode "1920x1080@144.003"
-    position x=2560 y=0
+    position x=0 y=0
     scale 1
     variable-refresh-rate
+}
+
+output "HDMI-A-1" {
+    mode "2560x1440@144.001"
+    position x=1920 y=0
+    scale 1
 }
 
 // Workspaces are dynamic per-output — each monitor gets its own independent
