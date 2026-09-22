@@ -1,40 +1,19 @@
 #!/usr/bin/env bash
-# shot-window — screenshot the focused Niri window to the clipboard.
-# Requires: niri (running session), grim, jq, wl-copy.
-# Bails out with a clear error if any dependency is missing or no window is focused.
+# shot-window — screenshot the focused window to the clipboard.
+#
+# Backed by niri's built-in `screenshot-window` action: it grabs the focused
+# window's foreign-toplevel frame and forwards it via wlr-screencopy. Since
+# the focused window owns any open dropdown / popup attached to it, transient
+# UI is captured as part of the toplevel.
+#
+# Replaces the previous `grim + jq over niri focused-window` pipeline — same
+# observable behaviour, fewer moving parts, no slurp, no jq parse.
 
 set -euo pipefail
 
-for cmd in niri grim jq wl-copy; do
-    if ! command -v "$cmd" &>/dev/null; then
-        echo "shot-window: required command '$cmd' not found in PATH" >&2
-        exit 1
-    fi
-done
-
-# Pull the focused window JSON from niri. The output is the JSON object for
-# the focused window, or empty/null if nothing is focused.
-json=$(niri msg -j focused-window 2>/dev/null || true)
-
-if [[ -z "$json" || "$json" == "null" ]]; then
-    echo "shot-window: no focused window" >&2
+if ! command -v niri &>/dev/null; then
+    echo "shot-window: requires niri running" >&2
     exit 1
 fi
 
-# Extract geometry. niri's FocusedWindow JSON exposes:
-#   tile_pos        { "x": i32, "y": i32 }   (may be null)
-#   window_size     { "width": u32, "height": u32 }
-# grim's -g flag expects "<x>,<y> <width>x<height>".
-geom=$(printf '%s' "$json" | jq -r '
-    if (.tile_pos != null) and (.window_size != null)
-    then "\(.tile_pos.x),\(.tile_pos.y) \(.window_size.width)x\(.window_size.height)"
-    else empty
-    end
-' 2>/dev/null || true)
-
-if [[ -z "$geom" ]]; then
-    echo "shot-window: focused window has no capturable geometry" >&2
-    exit 1
-fi
-
-grim -g "$geom" - | wl-copy --type image/png
+exec niri msg action screenshot-window --show-pointer true

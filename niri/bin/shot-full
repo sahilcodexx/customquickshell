@@ -1,16 +1,21 @@
 #!/usr/bin/env bash
-# shot-full — instant full-screen screenshot to the clipboard. No slurp, no
-# region picker, no focus-stealing overlay: grim fires the wlr-screencopy
-# immediately, so any open dropdown / menu / popup is captured exactly as
-# rendered at the moment of the keybind.
+# shot-full — instant full-screen screenshot to the clipboard.
+#
+# Backed by niri's built-in `screenshot-screen` action which uses the same
+# wlr-screencopy handshake as grim, but fires it directly from the compositor
+# (no shell pipeline, no slurp overlay between the keybind and the
+# screencopy). Result: open dropdowns / menus / popups are captured exactly
+# as rendered at the instant the keybind runs, with nothing in between to
+# dismiss them.
+#
+# Side effect (kept): also writes to the path set in niri's screenshot-path
+# config, matching what `Print` does.
 
 set -euo pipefail
 
-for cmd in grim wl-copy; do
-    if ! command -v "$cmd" &>/dev/null; then
-        echo "shot-full: required command '$cmd' not found in PATH" >&2
-        exit 1
-    fi
-done
+if ! command -v niri &>/dev/null; then
+    echo "shot-full: requires niri running" >&2
+    exit 1
+fi
 
-grim - | wl-copy --type image/png
+exec niri msg action screenshot-screen --show-pointer true

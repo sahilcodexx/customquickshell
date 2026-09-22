@@ -1,40 +1,32 @@
 #!/usr/bin/env bash
-# shot-region — pick a screen region with slurp, capture with grim, copy to
-# clipboard. Optional --delay <ms> opens the picker after a countdown so the
-# caller can position dropdowns / menus / tooltips before the picker pops.
+# shot-region — interactively select a screen region with the niri-built-in
+# region picker, save to clipboard.
 #
-# Default delay matches Hyprland-style screenshot behaviour: 0ms (no delay).
-# Pass `--delay 1500` for a 1.5s countdown.
+# Backed by niri's `screenshot` action which opens niri's own picker UI
+# (built into the compositor — uses its own layer-shell surface, not slurp).
+# Captures whatever's in the framebuffer at picker-confirm time.
+#
+# We still keep the same --delay <ms> shape as before so end4 / Hyprland users
+# recognise the timing-sensitivity mitigation; for niri the delay is
+# generally unnecessary since niri's picker doesn't behave the same way as
+# slurp (it doesn't need to steal keyboard focus from the focused window).
 
 set -euo pipefail
 
-for cmd in grim slurp wl-copy; do
-    if ! command -v "$cmd" &>/dev/null; then
-        echo "shot-region: required command '$cmd' not found in PATH" >&2
-        exit 1
-    fi
-done
+if ! command -v niri &>/dev/null; then
+    echo "shot-region: requires niri running" >&2
+    exit 1
+fi
 
 delay_ms=0
 if [[ "${1:-}" == "--delay" ]]; then
     delay_ms="${2:-0}"
 fi
 
-# Snackbar-style count-up so the user knows how long they have. notify-send is
-# the same channel Hyprland uses for screenshot capture notifications.
 if [[ "$delay_ms" -gt 0 ]]; then
     notify-send -a shot-region -t "$delay_ms" \
         "Screenshot in $((delay_ms / 1000))s — open dropdowns / menus now"
     sleep "$(awk -v ms="$delay_ms" 'BEGIN { printf "%.3f", ms / 1000 }')"
 fi
 
-# slurp prints the selected geometry on stdout and exits 0. Esc/right-click
-# makes slurp exit non-zero with no output — treat that as cancel.
-if ! geom=$(slurp 2>/dev/null); then
-    exit 0
-fi
-if [[ -z "$geom" ]]; then
-    exit 0
-fi
-
-grim -g "$geom" - | wl-copy --type image/png
+exec niri msg action screenshot --show-pointer true

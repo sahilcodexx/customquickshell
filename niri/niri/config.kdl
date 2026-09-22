@@ -234,7 +234,7 @@ binds {
     Mod+Alt+R { spawn-sh "$HOME/.local/bin/rec-with-audio"; }
     Ctrl+Mod+Alt+R { spawn-sh "$HOME/.local/bin/rec-no-audio"; }
     Mod+S { spawn-sh "$HOME/.local/bin/shot-window"; }
-    Mod+Shift+S { spawn-sh "$HOME/.local/bin/shot-region --delay 1500"; }
+    Mod+Shift+S { spawn-sh "$HOME/.local/bin/shot-region"; }
     Mod+Grave { spawn-sh "$HOME/.local/bin/shot-region"; }
     Mod+Alt+S { spawn-sh "$HOME/.local/bin/shot-full"; }
    Mod+Alt+V { spawn-sh "$HOME/.local/bin/rec-region"; }
