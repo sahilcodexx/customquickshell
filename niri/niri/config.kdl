@@ -204,6 +204,7 @@ binds {
     Mod+C { spawn-sh "code"; }
     Mod+Z { spawn-sh "zed"; }
     Mod+F10 { spawn-sh "$HOME/.local/bin/hypr-display-toggle toggle"; }
+    Mod+Period { spawn "~/.config/hypr/hyprland/scripts/fuzzel-emoji.sh" "copy"; }
 
     // ── Noctalia panels (add your own when you make your dotfiles) ──
     Mod+Space { spawn-sh "noctalia msg panel-toggle launcher"; }
@@ -228,6 +229,9 @@ binds {
     Mod+S { spawn-sh "$HOME/.local/bin/shot-window"; }
     Mod+Shift+S { spawn-sh "$HOME/.local/bin/shot-region"; }
     Mod+Grave { spawn-sh "$HOME/.local/bin/shot-region"; }
+   Mod+Alt+V { spawn-sh "$HOME/.local/bin/rec-region"; }
+
+
 
     // ── Color Picker ──
     Mod+Shift+C { spawn-sh "hyprpicker -a"; }
@@ -374,3 +378,5 @@ debug {
     honor-xdg-activation-with-invalid-serial
     emulate-zero-presentation-time
 }
+
+

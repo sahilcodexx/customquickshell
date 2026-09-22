@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# rec-region — pick a screen region with slurp, then toggle recording.
+# Same PID-file toggle pattern as rec-with-audio / rec-no-audio.
+#
+# Usage: bind to a keybind (e.g. Mod+Alt+V). First press: slurp pops up,
+# you drag a rectangle, recording starts. Second press: stops cleanly.
+#
+# Why this shape instead of one-shot-record-and-exit? A toggle is what every
+# recorder keybind wants — press once, do the thing, press again to stop —
+# and slurp's stdin interaction doesn't survive across invocations, so we
+# have to drive slurp inside the script anyway.
+
+set -u
+
+LABEL="region"
+STATE_DIR="$HOME/.local/state"
+PID_FILE="$STATE_DIR/rec-region.pid"   # contents: "<pid> <output.mp4>"
+LOG_FILE="$STATE_DIR/rec-region.log"
+OUT_DIR="$HOME/Videos/Recordings"
+
+mkdir -p "$STATE_DIR" "$OUT_DIR"
+
+is_running() {
+    [[ -f "$PID_FILE" ]] && kill -0 "$(awk '{print $1}' "$PID_FILE")" 2>/dev/null
+}
+
+stop_recording() {
+    local pid outpath
+    read -r pid outpath < "$PID_FILE"
+    kill -INT "$pid" 2>/dev/null || true
+    for _ in 1 2 3 4 5; do
+        kill -0 "$pid" 2>/dev/null || break
+        sleep 0.2
+    done
+    kill -TERM "$pid" 2>/dev/null || true
+    sleep 0.2
+    kill -KILL "$pid" 2>/dev/null || true
+    rm -f "$PID_FILE"
+    if [[ -n "$outpath" && -f "$outpath" ]]; then
+        notify-send -a gpu-screen-recorder -t 4000 "Region recording stopped" "Saved: $outpath"
+    else
+        notify-send -a gpu-screen-recorder -t 4000 "Region recording stopped" "Output: $OUT_DIR"
+    fi
+}
+
+start_recording() {
+    # slurp prints "<W>x<H>+<X>+<Y>" on stdout when the user confirms a selection,
+    # or exits non-zero when the user cancels (Esc). We match the gsr regex.
+    local region
+    region=$(/usr/bin/slurp -f '%wx%h+%x+%y') || {
+        notify-send -a gpu-screen-recorder -t 2000 "Region recording cancelled" "No region selected"
+        exit 0
+    }
+
+    # If a previous region run left the daemon running for some reason, stop it first.
+    if is_running; then
+        stop_recording
+    fi
+
+    local outpath="$OUT_DIR/rec-region-$(date +%Y%m%d-%H%M%S).mp4"
+    # -w region + -region WxH+X+Y = KMS-direct capture of just the rectangle.
+    # gsr REQUIRES -w region when -region is given (anything else errors with
+    # "option -region can only be used when option '-w region' is used").
+    # No portal session involved, so no flakiness under repeated invocations.
+    setsid /usr/bin/gpu-screen-recorder \
+        -w region \
+        -region "$region" \
+        -f 60 \
+        -k h264 \
+        -c mp4 \
+        -cursor yes \
+        -cr limited \
+        -o "$outpath" \
+        -v no \
+        >> "$LOG_FILE" 2>&1 &
+    local pid=$!
+    disown "$pid" 2>/dev/null || true
+    echo "$pid $outpath" > "$PID_FILE"
+    notify-send -a gpu-screen-recorder -t 4000 "Region recording started ($region)" "Press $LABEL keybind again to stop."
+}
+
+if is_running; then
+    stop_recording
+else
+    rm -f "$PID_FILE"
+    start_recording
+fi

@@ -143,6 +143,7 @@ Every keybind in the config — full reference in `end4/niri/KEYBINDS.txt`. High
 | `Mod+Comma` | noctalia settings |
 | `Mod+Alt+R` | toggle screen recording **with system audio** (`rec-with-audio`) |
 | `Ctrl+Mod+Alt+R` | toggle screen recording **without audio** (`rec-no-audio`) |
+| `Mod+Alt+V` | toggle **region** screen recording — slurp pops a rectangle, then `rec-region` records just that area |
 | `Mod+Ctrl+R` | restart noctalia (`noctalia-restart`) |
 | `Print` | screenshot UI (niri's built-in) |
 | XF86Audio* | volume / mute / mic / media keys via wpctl + playerctl |
@@ -155,6 +156,7 @@ Helper scripts referenced from keybinds live in `~/.local/bin/`:
 - `noctalia-restart` — kill+respawn noctalia daemon (recovery helper)
 - `rec-with-audio` — toggle recording with `-a default_output -ac opus` via `gpu-screen-recorder -w screen`
 - `rec-no-audio` — toggle video-only recording via `gpu-screen-recorder -w screen`
+- `rec-region` — first press pops `slurp` to pick a rectangle, then toggles region-only recording via `gpu-screen-recorder -w region -region WxH+X+Y`. Reuses the same toggle PID-file pattern as the other two.
 
 #### Why two `gpu-screen-recorder` wrappers instead of the noctalia plugin?
 
